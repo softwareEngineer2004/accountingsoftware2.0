@@ -1,0 +1,10 @@
+{
+    "name": "@repo/db",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "dependencies": {
+        "@prisma/client": "^6.11.1",
+        "prisma": "^6.11.1"
+    }
+}
