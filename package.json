@@ -7,7 +7,8 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "server:dev": "turbo run dev --filter=server"
+    "server:dev": "turbo run dev --filter=server",
+    "webapp:dev": "turbo run dev --filter=web"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
