@@ -13,3 +13,331 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ===========================================
+// ENUMS
+// ===========================================
+enum SubscriptionPaymentStatus {
+  Pending
+  Succeed
+  Failed
+  Canceled
+}
+
+enum ContactServiceType {
+  VENDOR
+  CUSTOMER
+  EMPLOYEE
+  OTHER
+}
+
+enum VendorStatus {
+  overdue
+  unpaid
+}
+
+// ===========================================
+// BUSINESS MODELS
+// ===========================================
+
+model Option {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  group     String
+  key       String
+  value     String   @default("") // Can store as stringified JSON or basic value
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, group, key]) // Prevent duplicate settings per tenant
+  @@map("options") // Maps to actual DB table name
+}
+
+model BankRule {
+  id                     Int                  @id @default(autoincrement())
+  tenantId              Int
+  name                  String
+  order                 Int
+  applyIfAccountId      Int?
+  applyIfTransactionType String?
+  assignCategory        String?
+  assignAccountId       Int?
+  assignPayee           String?
+  assignMemo            String?
+  conditionsType        String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  // Relations
+  conditions            BankRuleCondition[]
+  assignAccount         Account?             @relation(fields: [assignAccountId], references: [id])
+  tenant                Tenant               @relation(fields: [tenantId], references: [id])
+
+  @@map("bank_rules")
+}
+
+model BankRuleCondition {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  ruleId    Int      // Foreign key to BankRule
+  field     String   // Example condition field (e.g., "description")
+  operator  String   // e.g., "contains", "equals"
+  value     String   // the value to check
+  // No timestamps (per Objection model)
+
+  // Relations
+  rule      BankRule @relation(fields: [ruleId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("bank_rule_conditions")
+}
+
+model Contact {
+  id                          String   @id @default(uuid())
+  tenantId                   String
+  displayName                String?
+  firstName                  String?
+  lastName                   String?
+  companyName                String?
+  email                      String?
+  workPhone                  String?
+  personalPhone              String?
+  website                    String?
+  openingBalance             Float?    @default(0)
+  openingBalanceExchangeRate Float?    @default(1)
+  balance                    Float?    @default(0)
+  active                     Boolean   @default(true)
+  contactService             ContactServiceType @default(VENDOR)
+
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  // Relation with Tenant
+  tenant                     Tenant    @relation(fields: [tenantId], references: [id])
+
+  // Relation with Bills
+  bills                      Bill[]    @relation("VendorBills")
+
+  @@map("contacts") // maps to actual table
+}
+
+
+
+// ===========================================
+// SYSTEM MODELS  
+// ===========================================
+model Tenant {
+  id             Int              @id @default(autoincrement())
+  organizationId String          @unique @default(dbgenerated()) // Can customize if you want to match uniqid
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  initializedAt  DateTime?       
+  seededAt       DateTime?
+  buildJobId     String?         
+  upgradeJobId   String?
+
+  // Relations
+  subscriptions  PlanSubscription[] 
+  metadata       TenantMetadata?     @relation(fields: [id], references: [tenantId])
+
+  @@map("tenants") // Map to actual table name if needed
+}
+
+model TenantMetadata {
+  id           Int     @id @default(autoincrement())
+  tenantId     Int     @unique
+  name         String
+  industry     String?
+  location     String?
+  baseCurrency String
+  language     String?
+  timezone     String?
+  dateFormat   String?
+  fiscalYear   String?
+  primaryColor String?   // e.g., hex like "#ffffff"
+  logoKey      String?
+  address      Json?
+
+  tenant       Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@map("tenantsMetadata")
+}
+
+// responsible for (tracking of tenants uploads)
+model Import {
+  id         Int      @id @default(autoincrement())
+  resource   String
+  tenantId   Int
+  mapping    String
+  columns    String
+  params     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relation to Tenant
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("imports")
+}
+
+model UserInvite {
+  id          Int       @id @default(autoincrement())
+  tenantId    Int
+  email       String    @db.VarChar(255)
+  token       String    @db.VarChar(255)  // Secure invite token (used in link)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // Soft delete support
+  acceptedAt  DateTime? // When invite was accepted
+  expiredAt   DateTime? // Optional: Set explicitly if you want custom expiration
+  
+  // Relations
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model OneClickDemo {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int?     // Optional: the demo might create a temporary tenant
+  email      String?  @db.VarChar(255) // Optional: requester email for the demo
+  createdAt  DateTime @default(now())
+  expiredAt  DateTime? // If demo is time-bound
+  deletedAt  DateTime? // Optional: soft delete
+
+  // Relations
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(255) // Email of user requesting reset
+  token     String   @db.VarChar(255) // Secure token sent to user
+  tenantId  Int?                           // Optional: multi-tenant support
+  createdAt DateTime @default(now())
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@index([tenantId])
+}
+
+model PaymentLink {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  resourceId   Int
+  resourceType String   @db.VarChar(100)
+  linkId       String   @unique @db.VarChar(255)
+  publicity    String   @db.VarChar(50)
+  expiryAt     DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([resourceType, resourceId])
+}
+
+model StripeAccount {
+  id               Int      @id @default(autoincrement())
+  tenantId         Int      @unique
+  stripeAccountId  String   @db.VarChar(255)
+  country          String?  @db.VarChar(2)
+  type             String?  @db.VarChar(50)
+  detailsSubmitted Boolean  @default(false)
+  chargesEnabled   Boolean  @default(false)
+  payoutsEnabled   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([stripeAccountId])
+}
+
+model PlaidItem {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  plaidItemId  String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  firstName         String
+  lastName          String
+  email             String    @unique
+  password          String
+  verified          Boolean   @default(false)
+  inviteAcceptedAt  DateTime? 
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenantId          Int
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+// ===========================================
+// SUBSCRIPTION MODELS
+// ===========================================
+model SubscriptionPlan {
+  id               Int               @id @default(autoincrement())
+  price            Float
+  invoiceInternal  Int
+  invoicePeriod    String
+
+  // Optional fields (used in virtual `hasTrial`)
+  trialPeriod      Int?             // e.g., 7
+  trialInterval    String?          // e.g., "day", "week", "month"
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations
+  subscriptions    Subscription[]   @relation("PlanToSubscriptions")
+
+  @@map("subscription_plans")
+}
+
+model Subscriptions{
+  id                   Int               @id @default(autoincrement())
+  lemonSubscriptionId  Int?              // External billing system reference
+
+  startsAt             DateTime?
+  endsAt               DateTime?
+  trialEndsAt          DateTime?
+  canceledAt           DateTime?
+
+  paymentStatus        SubscriptionPaymentStatus
+
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  // Relations
+  tenant               Tenant            @relation(fields: [tenantId], references: [id])
+  tenantId             Int
+
+  plan                 SubscriptionPlan  @relation("PlanToSubscriptions", fields: [planId], references: [id])
+  planId               Int
+
+  @@map("subscription_plan_subscriptions")
+}
+
