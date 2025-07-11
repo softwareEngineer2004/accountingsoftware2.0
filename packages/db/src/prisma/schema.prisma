@@ -214,55 +214,57 @@ model ItemCategory {
 }
 
 model Media {
-  id         Int          @id @default(autoincrement())
-  createdAt  DateTime?    @map("created_at")
-  updatedAt  DateTime?    @map("updated_at")
-  // Add other fields as needed, e.g.:
-  // url        String?
-  // type       String?
-  // size       Int?
-  // tenantId   Int?
+  id        Int          @id @default(autoincrement())
+  tenantId  Int                              // For multi-tenant isolation
+  name      String?                          // Optional name or label of the media
+  type      String?                          // Type: e.g. 'image', 'video', 'document'
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  links      MediaLink[]  @relation("MediaToLinks")
-
-  @@map("media")
+  // Relations
+  links     MediaLink[]                      // One media can have multiple links
 }
 
 model MediaLink {
-  id        Int      @id @default(autoincrement())
-  mediaId   Int
-  modelId   Int?
-  modelName String?
-  // Add other fields as needed
+  id        Int       @id @default(autoincrement())
+  tenantId  Int                           // For multi-tenant isolation
+  mediaId   Int                           // Foreign key to Media
+  url       String                        // Actual URL or path to the media file
+  label     String?                       // Optional label like 'thumbnail', 'preview', etc.
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  media     Media    @relation("MediaToLinks", fields: [mediaId], references: [id])
-
-  @@map("media_links")
+  // Relations
+  media     Media     @relation(fields: [mediaId], references: [id])
 }
 
 model PdfTemplate {
   id           Int      @id @default(autoincrement())
   templateName String
   attributes   Json?
-
-  createdAt    DateTime @map("created_at")
-  updatedAt    DateTime @map("updated_at")
+  default      Boolean?  // inferred from `modifiers.default`
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@map("pdf_templates")
 }
 
-model Role {
-  id            Int               @id @default(autoincrement())
-  name          String
-  tenantId      String
-  tenant        Tenant            @relation(fields: [tenantId], references: [id])
-  permissions   RolePermission[] 
 
-  createdAt     DateTime?         @map("created_at")
-  updatedAt     DateTime?         @map("updated_at")
+model Role {
+  id           Int               @id @default(autoincrement())
+  tenantId     Int              // Foreign key for multitenancy
+  name         String
+  // Add other fields here like description if needed
+
+  permissions  RolePermission[] // 1-to-many relation to RolePermission
+
+  // Optionally track creation/update timestamps
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@map("roles")
 }
+
 
 model RolePermission {
   id         Int    @id @default(autoincrement())
@@ -278,76 +280,55 @@ model RolePermission {
   @@map("role_permissions")
 }
 
-model User {
-  id                Int       @id @default(autoincrement())
-  firstName         String
-  lastName          String
-  email             String    @unique
-  roleId            Int
-  role              Role      @relation(fields: [roleId], references: [id])
-  inviteAcceptedAt  DateTime?
-  tenantId          String
-  tenant            Tenant    @relation(fields: [tenantId], references: [id])
-
-  createdAt         DateTime? @map("created_at")
-  updatedAt         DateTime? @map("updated_at")
-
-  @@map("users")
-}
-
 model Document {
-  id         Int              @id @default(autoincrement())
-  createdAt  DateTime?        @map("created_at")
-  updatedAt  DateTime?        @map("updated_at")
-  // You might need: name, url, type, size, etc.
-  // tenantId   Int?
+  id          Int              @id @default(autoincrement())       // Primary key
+  tenantId    Int                                                  // Tenant-scoped
+  createdAt   DateTime         @default(now())                     // Timestamp of creation
+  updatedAt   DateTime         @updatedAt                          // Timestamp of last update
 
-  links      DocumentLink[]   @relation("DocumentToLinks")
+  // Relations
+  documentLinks DocumentLink[]                                    // One-to-many relation
 
-  @@map("documents")
+  @@map("documents")                                               // Maps to documents table
 }
 
 model DocumentLink {
-  id         Int        @id @default(autoincrement())
-  documentId Int
-  modelId    Int?       // the ID of the linked entity (invoice, etc.)
-  modelName  String?    // name of the entity type (e.g. "Invoice")
+  id          Int       @id @default(autoincrement())              // Primary key
+  tenantId    Int                                               // Tenant-scoped
+  documentId  Int                                               // FK to documents.id
+  createdAt   DateTime   @default(now())                          // Timestamp of creation
+  updatedAt   DateTime   @updatedAt                               // Timestamp of last update
 
-  document   Document   @relation("DocumentToLinks", fields: [documentId], references: [id])
+  // Relations
+  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime?  @map("created_at")
-  updatedAt  DateTime?  @map("updated_at")
-
-  @@map("document_links")
+  @@map("document_links")                                         // Maps to document_links table
 }
 
 model Currency {
-  id         Int       @id @default(autoincrement())
-  code       String    @unique   // e.g., "USD"
-  symbol     String?              // e.g., "$"
-  name       String?              // e.g., "US Dollar"
-  tenantId   Int?
-  createdAt  DateTime? @map("created_at")
-  updatedAt  DateTime? @map("updated_at")
-
-  @@map("currencies")
+  id         Int      @id @default(autoincrement())                  // Primary key
+  code       String                                                // ISO currency code (e.g., "USD")
+  name       String                                                // Name of currency (e.g., "US Dollar")
+  symbol     String?                                               // Optional symbol (e.g., "$")
+  createdAt  DateTime  @default(now())                             // Timestamp when added
+  updatedAt  DateTime  @updatedAt                                  // Auto-updated timestamp
+  @@map("currencies") // Maps to actual table name
 }
+
+
 
 model ExchangeRate {
-  id           Int       @id @default(autoincrement())
-  currencyCode String?   @map("currency_code")  // optional legacy support
-  exchangeRate Float     @map("exchange_rate")
-  date         DateTime
-  tenantId     Int?
-  createdAt    DateTime? @map("created_at")
-  updatedAt    DateTime? @map("updated_at")
+  id            Int      @id @default(autoincrement())           // Primary key
 
-  // New field to properly relate to Currency
-  currencyId   Int?
-  currency     Currency? @relation(fields: [currencyId], references: [id])
+  currencyCode  String    @map("currency_code")               // ISO currency code, e.g., "USD"
+  exchangeRate  Float     @map("exchange_rate")               // Actual rate value
+  date          DateTime                                       // Date the rate applies to
+  createdAt     DateTime  @default(now()) @map("created_at")   // When the record was inserted
+  updatedAt     DateTime  @updatedAt                           // Auto-updated on change
 
-  @@map("exchange_rates")
+  @@map("exchange_rates") // Map Prisma model to the actual DB table
 }
+
 
 model AccountTransaction {
   id              Int       @id @default(autoincrement())
@@ -459,106 +440,78 @@ model SaleInvoice {
 // SYSTEM MODELS  
 // ===========================================
 model Tenant {
-  id             Int              @id @default(autoincrement())
-  organizationId String          @unique @default(dbgenerated()) // Can customize if you want to match uniqid
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id             Int       @id @default(autoincrement())
+  organizationId String    @unique // Uniqid-based or provided identifier for tenant
+  upgradeJobId   String?   // ID of the job managing tenant upgrade, if any
+  buildJobId     String?   // ID of the job managing tenant build, if any
+  initializedAt  DateTime? // Marks when tenant setup (like DB init) completed
+  seededAt       DateTime? // Marks when seed data was populated
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  initializedAt  DateTime?       
-  seededAt       DateTime?
-  buildJobId     String?         
-  upgradeJobId   String?
+  // One-to-many: A tenant can have multiple plan subscriptions
+  subscriptions  PlanSubscription[]
 
-  // Relations
-  subscriptions  PlanSubscription[] 
-  metadata       TenantMetadata?     @relation(fields: [id], references: [tenantId])
+  // One-to-one: A tenant can have one metadata entry
+  metadata       TenantMetadata?
 
-  @@map("tenants") // Map to actual table name if needed
+  @@map("tenants") // Maps to the "tenants" table in the DB
 }
 
+
 model TenantMetadata {
-  id           Int     @id @default(autoincrement())
-  tenantId     Int     @unique
+  id           Int       @id @default(autoincrement())
+  tenantId     Int       @unique                          // One-to-one with Tenant
   name         String
   industry     String?
   location     String?
-  baseCurrency String
+  baseCurrency String    @db.Char(3)
   language     String?
   timezone     String?
   dateFormat   String?
   fiscalYear   String?
-  primaryColor String?   // e.g., hex like "#ffffff"
+  primaryColor String?   @db.Char(7)                      // Hex color code like #ffffff
   logoKey      String?
-  address      Json?
+  address      Json?                                     // JSON address structure
 
-  tenant       Tenant  @relation(fields: [tenantId], references: [id])
+  // Timestamps
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  @@map("tenantsMetadata")
+  // Relations
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
+
 
 // responsible for (tracking of tenants uploads)
 model Import {
-  id         Int      @id @default(autoincrement())
-  resource   String
-  tenantId   Int
-  mapping    String
-  columns    String
-  params     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  resource  String
+  mapping   String
+  columns   String
+  params    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relation to Tenant
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 
   @@map("imports")
 }
 
-model UserInvite {
-  id          Int       @id @default(autoincrement())
-  tenantId    Int
-  email       String    @db.VarChar(255)
-  token       String    @db.VarChar(255)  // Secure invite token (used in link)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime? // Soft delete support
-  acceptedAt  DateTime? // When invite was accepted
-  expiredAt   DateTime? // Optional: Set explicitly if you want custom expiration
-  
-  // Relations
-  tenant      Tenant    @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-  @@index([email])
-}
-
-model OneClickDemo {
-  id         Int      @id @default(autoincrement())
-  tenantId   Int?     // Optional: the demo might create a temporary tenant
-  email      String?  @db.VarChar(255) // Optional: requester email for the demo
-  createdAt  DateTime @default(now())
-  expiredAt  DateTime? // If demo is time-bound
-  deletedAt  DateTime? // Optional: soft delete
-
-  // Relations
-  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-  @@index([email])
-}
-
 model PasswordReset {
-  id        Int      @id @default(autoincrement())
-  email     String   @db.VarChar(255) // Email of user requesting reset
-  token     String   @db.VarChar(255) // Secure token sent to user
-  tenantId  Int?                           // Optional: multi-tenant support
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  token      String   // Store a hashed token here
+  userId     Int
+  tenantId   Int
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
 
-  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
-
-  @@index([email])
-  @@index([token])
-  @@index([tenantId])
+  // Relations
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 }
+
 
 model PaymentLink {
   id           Int      @id @default(autoincrement())
@@ -578,95 +531,195 @@ model PaymentLink {
 }
 
 model StripeAccount {
-  id               Int      @id @default(autoincrement())
-  tenantId         Int      @unique
-  stripeAccountId  String   @db.VarChar(255)
-  country          String?  @db.VarChar(2)
-  type             String?  @db.VarChar(50)
-  detailsSubmitted Boolean  @default(false)
-  chargesEnabled   Boolean  @default(false)
-  payoutsEnabled   Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id         Int      @id @default(autoincrement())
+  tenantId   Int      // Foreign key to Tenant
+  stripeId   String   // The actual Stripe account ID (e.g., acct_1XyzAbc123)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  // Relation to the Tenant
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
 
-  @@index([stripeAccountId])
+  @@map("stripe_accounts") // Maps to the actual table name in the DB
 }
 
 model PlaidItem {
-  id           Int      @id @default(autoincrement())
+  /// Primary ID for this record
+  id           Int       @id @default(autoincrement())
+
+  /// Foreign key referencing the tenant (organization) that owns this Plaid item
   tenantId     Int
-  plaidItemId  String   @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  /// Unique identifier for the Plaid item (i.e., a bank account connection)
+  plaidItemId  String    @map("plaid_item_id")
 
-  @@index([tenantId])
+  /// Timestamp when this record was created
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  /// Timestamp when this record was last updated
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  /// Relation to the Tenant model (each Plaid item belongs to one tenant)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@map("plaid_items") // Maps this Prisma model to the "plaid_items" table in the database
 }
+
 
 model User {
-  id                Int       @id @default(autoincrement())
-  firstName         String
-  lastName          String
-  email             String    @unique
-  password          String
-  verified          Boolean   @default(false)
-  inviteAcceptedAt  DateTime? 
-  deletedAt         DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 Int       @id @default(autoincrement())
+  tenantId           Int                                        // Foreign key to Tenant
+  firstName          String
+  lastName           String
+  verified           Boolean   @default(false)                  // Whether user's email is verified
+  inviteAcceptedAt   DateTime?                                  // Set when user accepts the invite
+  deletedAt          DateTime?                                  // Used for soft deletes
+  password           String                                     // Hashed password
 
-  tenantId          Int
-  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  roleId           Int?                                      // FK to Role (optional for invited users)
 
-  @@index([tenantId])
+  // Timestamps
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  tenant             Tenant    @relation(fields: [tenantId], references: [id])
+  role               Role?     @relation(fields: [roleId], references: [id])
+
+  @@map("users")  // Map Prisma model to `users` table in DB
 }
 
+
+model UserInvite {
+  id              Int       @id @default(autoincrement())
+  email           String    // Email of the invited user
+  token           String    @unique // Unique invite code (e.g., UUID or random string)
+  role            String    // Role the invited user will have (e.g., "admin", "editor", etc.)
+  tenantId        Int       // Tenant/org who sent the invite
+  invitedByUserId Int       // User who sent the invite
+
+  createdAt       DateTime  @default(now())
+  acceptedAt      DateTime? // Set when user accepts invite
+
+  // Relations
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  invitedBy       User      @relation("UserInvites", fields: [invitedByUserId], references: [id])
+
+  @@map("user_invites")
+}
+
+model OneClickDemo {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique // unique slug for the demo link
+  tenantId   Int?     // which tenant was spun up for this demo
+  usedAt     DateTime? // when user clicked/used the demo
+  usedByEmail String?  // who used it, if captured
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime?
+
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("oneclick_demos")
+}
+
+/// Represents a tax rule that can be applied to invoices, purchases, etc.
+/// This table holds reusable tax definitions like GST 18%, VAT 5%, etc.
+model TaxRate {
+  /// Primary key
+  id               Int     @id @default(autoincrement())
+
+  /// Display name of the tax rate (e.g., "GST 18%")
+  name             String
+
+  /// Unique code for this tax rate (e.g., "GST18", "VAT5")
+  code             String
+
+  /// The percentage rate of the tax (e.g., 18.0 for 18%)
+  rate             Float
+
+  /// Optional description for documentation or UI display
+  description      String?
+
+  /// Whether this tax is non-recoverable (i.e., cannot be claimed back)
+  isNonRecoverable Boolean
+
+  /// Indicates if this tax rate is currently active
+  active           Boolean @default(true)
+
+  /// Timestamp when the record was created
+  createdAt        DateTime @default(now())
+
+  /// Timestamp when the record was last updated
+  updatedAt        DateTime @updatedAt
+
+  /// Inbound relation: All tax transactions associated with this tax rate
+  taxRateTransactions TaxRateTransaction[]
+}
+
+/// Represents an applied tax instance — e.g., a line item on an invoice or expense.
+/// This model links back to the `TaxRate` it was based on.
+model TaxRateTransaction {
+  /// Primary key
+  id         Int       @id @default(autoincrement())
+
+  /// Foreign key linking to the TaxRate that was applied
+  taxRateId  Int
+
+  /// Amount of tax applied in this transaction (optional; may be computed)
+  amount     Float?
+
+  /// Timestamp when the record was created
+  createdAt  DateTime  @default(now())
+
+  /// Timestamp when the record was last updated
+  updatedAt  DateTime  @updatedAt
+
+  /// Relation to the TaxRate model
+  taxRate    TaxRate   @relation(fields: [taxRateId], references: [id], onDelete: Cascade)
+}
+
+
+
 // ===========================================
-// SUBSCRIPTION MODELS
+// SUBSCRIPTION/PLAN MODELS
 // ===========================================
-model SubscriptionPlan {
-  id               Int               @id @default(autoincrement())
-  price            Float
+model Plan {
+  id               Int                 @id @default(autoincrement())
+  price            Float              // Assuming price is decimal-like
   invoiceInternal  Int
   invoicePeriod    String
+  trialPeriod      Int?               // Based on `hasTrial()` method logic
+  trialInterval    String?            // Same as above
 
-  // Optional fields (used in virtual `hasTrial`)
-  trialPeriod      Int?             // e.g., 7
-  trialInterval    String?          // e.g., "day", "week", "month"
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  subscriptions    PlanSubscription[] @relation("PlanToSubscription")
 
-  // Relations
-  subscriptions    Subscription[]   @relation("PlanToSubscriptions")
-
-  @@map("subscription_plans")
+  @@map("subscription_plans")         // Maps to actual table name
 }
 
-model Subscriptions{
-  id                   Int               @id @default(autoincrement())
-  lemonSubscriptionId  Int?              // External billing system reference
+model PlanSubscription {
+  id                  Int                    @id @default(autoincrement())
+  tenantId            Int
+  planId              Int
 
-  startsAt             DateTime?
-  endsAt               DateTime?
-  trialEndsAt          DateTime?
-  canceledAt           DateTime?
+  lemonSubscriptionId Int?                   // Optional if not always present
+  startsAt            DateTime?
+  endsAt              DateTime?
+  canceledAt          DateTime?
+  trialEndsAt         DateTime?
+  paymentStatus       SubscriptionPaymentStatus
 
-  paymentStatus        SubscriptionPaymentStatus
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  // RELATIONS
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id])
+  plan                Plan                   @relation(fields: [planId], references: [id])
 
-  // Relations
-  tenant               Tenant            @relation(fields: [tenantId], references: [id])
-  tenantId             Int
-
-  plan                 SubscriptionPlan  @relation("PlanToSubscriptions", fields: [planId], references: [id])
-  planId               Int
-
-  @@map("subscription_plan_subscriptions")
+  @@map("subscription_plan_subscriptions")   // Match DB table
 }
+
+
 
