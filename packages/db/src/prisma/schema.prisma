@@ -41,6 +41,11 @@ enum DiscountType {
   Percentage
 }
 
+enum InventoryAdjustmentType {
+  Increment
+  Decrement
+}
+
 // ===========================================
 // BUSINESS MODELS
 // ===========================================
@@ -116,24 +121,6 @@ model Contact {
   openingBalanceExchangeRate    Float?    @map("opening_balance_exchange_rate")
   currencyCode                  String?   @map("currency_code")
   active                        Boolean   @default(true) @map("active")
-  id                            Int       @id @default(autoincrement())
-  contactService                String    @map("contact_service") // should be 'customer'
-  customerType                  String?   @map("customer_type")   // 'business' or 'individual'
-  firstName                     String?   @map("first_name")
-  lastName                      String?   @map("last_name")
-  displayName                   String    @map("display_name")
-  email                         String?   @map("email")
-  workPhone                     String?   @map("work_phone")
-  personalPhone                 String?   @map("personal_phone")
-  companyName                   String?   @map("company_name")
-  website                       String?   @map("website")
-  note                          String?   @map("note")
-  balance                       Decimal   @default(0) @map("balance")
-  openingBalance                Decimal   @default(0) @map("opening_balance")
-  openingBalanceAt              DateTime? @map("opening_balance_at")
-  openingBalanceExchangeRate    Float?    @map("opening_balance_exchange_rate")
-  currencyCode                  String?   @map("currency_code")
-  active                        Boolean   @default(true) @map("active")
 
   // Billing Address
   billingAddress1               String?   @map("billing_address1")
@@ -152,22 +139,7 @@ model Contact {
   shippingAddressCountry        String?   @map("shipping_address_country")
   shippingAddressPostcode       String?   @map("shipping_address_postcode")
   shippingAddressPhone          String?   @map("shipping_address_phone")
-  // Shipping Address
-  shippingAddress1              String?   @map("shipping_address1")
-  shippingAddress2              String?   @map("shipping_address2")
-  shippingAddressCity           String?   @map("shipping_address_city")
-  shippingAddressState          String?   @map("shipping_address_state")
-  shippingAddressCountry        String?   @map("shipping_address_country")
-  shippingAddressPostcode       String?   @map("shipping_address_postcode")
-  shippingAddressPhone          String?   @map("shipping_address_phone")
 
-  createdAt                     DateTime  @default(now()) @map("created_at")
-  updatedAt                     DateTime  @updatedAt      @map("updated_at")
-
-  currency                      Currency? @relation(fields: [currencyCode], references: [code])
-
-  @@map("contacts") // actual table name
-}
 
   createdAt                     DateTime  @default(now()) @map("created_at")
   updatedAt                     DateTime  @updatedAt      @map("updated_at")
@@ -187,80 +159,25 @@ model PaymentIntegration {
   options        Json?                                                // Additional config (bankAccountId, etc.)
   createdAt      DateTime  @default(now())                            // When the record was created
   updatedAt      DateTime  @updatedAt                                 // Auto-managed updated timestamp
-  id             Int       @id @default(autoincrement())                // Primary key
-  service        String                                               // Name of payment provider
-  paymentEnabled Boolean                                              // Whether payment receiving is allowed
-  payoutEnabled  Boolean                                              // Whether payouts are enabled
-  accountId      String?                                              // External account ID (e.g., from Stripe)
-  options        Json?                                                // Additional config (bankAccountId, etc.)
-  createdAt      DateTime  @default(now())                            // When the record was created
-  updatedAt      DateTime  @updatedAt                                 // Auto-managed updated timestamp
 
   @@map("payment_integrations")
 }
 
-
-
-model PaymentReceive {
-  id                 String   @id @default(uuid())
-  tenantId           String
-  customerId         String?
-  depositAccountId   String?
-  branchId           String?
-  pdfTemplateId      String?
-
-  paymentReceiveNo   String?
-  referenceNo        String?
-  statement          String?
-  amount             Float    @default(0)
-  paymentAmount      Float    @default(0)
-  exchangeRate       Float    @default(1)
-  date               DateTime
-  notes              String?
-  isDraft            Boolean  @default(false)
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  // Relations
-  tenant             Tenant      @relation(fields: [tenantId], references: [id])
-  customer           Contact?    @relation(fields: [customerId], references: [id])
-  depositAccount     Account?    @relation(fields: [depositAccountId], references: [id])
-  branch             Branch?     @relation(fields: [branchId], references: [id])
-  pdfTemplate        PdfTemplate? @relation(fields: [pdfTemplateId], references: [id])
-
-  entries            PaymentReceiveEntry[]
-  transactions       AccountTransaction[] @relation("PaymentReceiveTransactions")
-  attachments        DocumentLink[]       @relation("PaymentReceiveDocuments")
-
-  @@map("payment_receives")
-}
-
 model ItemCategory {
-  id          Int      @id @default(autoincrement())
-  tenantId    Int
+  id          String   @id @default(cuid())
+  tenantId    String
   name        String
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items       Item[]
+  items       Item[]   // One category can be associated with many items
 
   @@map("items_categories")
 }
 
 model Media {
-  id        Int          @id @default(autoincrement())
-  tenantId  Int                              // For multi-tenant isolation
-  name      String?                          // Optional name or label of the media
-  type      String?                          // Type: e.g. 'image', 'video', 'document'
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  // Relations
-  links     MediaLink[]                      // One media can have multiple links
   id        Int          @id @default(autoincrement())
   tenantId  Int                              // For multi-tenant isolation
   name      String?                          // Optional name or label of the media
@@ -283,25 +200,12 @@ model MediaLink {
 
   // Relations
   media     Media     @relation(fields: [mediaId], references: [id])
-  id        Int       @id @default(autoincrement())
-  tenantId  Int                           // For multi-tenant isolation
-  mediaId   Int                           // Foreign key to Media
-  url       String                        // Actual URL or path to the media file
-  label     String?                       // Optional label like 'thumbnail', 'preview', etc.
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  // Relations
-  media     Media     @relation(fields: [mediaId], references: [id])
 }
 
 model PdfTemplate {
   id           Int      @id @default(autoincrement())
   templateName String
   attributes   Json?
-  default      Boolean?  // inferred from `modifiers.default`
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
   default      Boolean?  // inferred from `modifiers.default`
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -352,15 +256,6 @@ model Document {
   documentLinks DocumentLink[]                                    // One-to-many relation
 
   @@map("documents")                                               // Maps to documents table
-  id          Int              @id @default(autoincrement())       // Primary key
-  tenantId    Int                                                  // Tenant-scoped
-  createdAt   DateTime         @default(now())                     // Timestamp of creation
-  updatedAt   DateTime         @updatedAt                          // Timestamp of last update
-
-  // Relations
-  documentLinks DocumentLink[]                                    // One-to-many relation
-
-  @@map("documents")                                               // Maps to documents table
 }
 
 model DocumentLink {
@@ -373,27 +268,10 @@ model DocumentLink {
   // Relations
   document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  @@map("document_links")                                         // Maps to document_links table
-  id          Int       @id @default(autoincrement())              // Primary key
-  tenantId    Int                                               // Tenant-scoped
-  documentId  Int                                               // FK to documents.id
-  createdAt   DateTime   @default(now())                          // Timestamp of creation
-  updatedAt   DateTime   @updatedAt                               // Timestamp of last update
-
-  // Relations
-  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  @@map("document_links")                                         // Maps to document_links table
+  @@map("document_links")                                         // Maps to document_links table                                     // Maps to document_links table
 }
 
 model Currency {
-  id         Int      @id @default(autoincrement())                  // Primary key
-  code       String                                                // ISO currency code (e.g., "USD")
-  name       String                                                // Name of currency (e.g., "US Dollar")
-  symbol     String?                                               // Optional symbol (e.g., "$")
-  createdAt  DateTime  @default(now())                             // Timestamp when added
-  updatedAt  DateTime  @updatedAt                                  // Auto-updated timestamp
-  @@map("currencies") // Maps to actual table name
   id         Int      @id @default(autoincrement())                  // Primary key
   code       String                                                // ISO currency code (e.g., "USD")
   name       String                                                // Name of currency (e.g., "US Dollar")
@@ -409,13 +287,6 @@ model Currency {
 
 model ExchangeRate {
   id           Int       @id @default(autoincrement())
-  currencyId   Int                                            // FK to Currency
-  exchangeRate Float      @map("exchange_rate")               // Actual rate value
-  date         DateTime                                       // Date the rate applies to
-  createdAt    DateTime   @default(now()) @map("created_at")  // When inserted
-  updatedAt    DateTime   @updatedAt
-
-  currency     Currency   @relation(fields: [currencyId], references: [id])
   currencyId   Int                                            // FK to Currency
   exchangeRate Float      @map("exchange_rate")               // Actual rate value
   date         DateTime                                       // Date the rate applies to
@@ -443,23 +314,8 @@ model AccountTransaction {
   debit            Float          @default(0)
   date             DateTime
   createdAt        DateTime       @default(now())
-  id               Int            @id @default(autoincrement())
-  accountId        Int
-  contactId        Int?
-  taxRateId        Int?
-  exchangeRateId   Int?
-  referenceType    String
-  transactionType  String
-  credit           Float          @default(0)
-  debit            Float          @default(0)
-  date             DateTime
-  createdAt        DateTime       @default(now())
 
   // Relations
-  account          Account        @relation(fields: [accountId], references: [id])
-  contact          Contact?       @relation(fields: [contactId], references: [id])
-  taxRate          TaxRate?       @relation(fields: [taxRateId], references: [id])
-  exchangeRate     ExchangeRate?  @relation(fields: [exchangeRateId], references: [id])
   account          Account        @relation(fields: [accountId], references: [id])
   contact          Contact?       @relation(fields: [contactId], references: [id])
   taxRate          TaxRate?       @relation(fields: [taxRateId], references: [id])
@@ -468,92 +324,86 @@ model AccountTransaction {
   @@map("accounts_transactions")
 }
 
+model ItemWarehouseQuantity {
+  id          String   @id @default(cuid())
 
+  // Foreign keys
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
 
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
-model SaleReceipt {
-  id                String               @id @default(uuid())
-  receiptNumber     String?
-  referenceNo       String?
-  amount            Float
-  exchangeRate      Float
-  discount          Float?
-  discountType      DiscountType?
-  adjustment        Float?
-  closedAt          DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  // Likely field that stores how many items are available at this warehouse
+  quantity    Int      @default(0)
 
-  customerId        String?
-  depositAccountId  String?
-  branchId          String?
-  warehouseId       String?
+  // Multi-tenant support
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
 
-  customer          Contact?            @relation(fields: [customerId], references: [id])
-  depositAccount    Account?            @relation(fields: [depositAccountId], references: [id])
-  branch            Branch?             @relation(fields: [branchId], references: [id])
-  warehouse         Warehouse?          @relation(fields: [warehouseId], references: [id])
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  entries           ItemEntry[]         @relation("SaleReceiptEntries")
-  transactions      AccountTransaction[]@relation("SaleReceiptTransactions")
-  attachments       Document[]          @relation("SaleReceiptAttachments", through: DocumentLink)
-
-  @@map("sales_receipts")
+  @@map("items_warehouses_quantity")
 }
 
-model SaleReceiptEntry {
-  id               Int          @id @default(autoincrement())
-  saleReceiptId    Int
+model SaleInvoiceEntry {
+  id             String       @id @default(uuid())
+  saleInvoiceId  String
 
-  saleReceipt      SaleReceipt  @relation(fields: [saleReceiptId], references: [id])
+  // Relation
+  saleInvoice    SaleInvoice  @relation(fields: [saleInvoiceId], references: [id])
+
+  @@map("sales_invoices_entries")
+}
+model SaleReceiptEntry {
+  id             String       @id @default(uuid())
+  saleReceiptId  String
+
+  // 
+  saleReceipt    SaleReceipt  @relation(fields: [saleReceiptId], references: [id])
 
   @@map("sales_receipt_entries")
 }
 
-model SaleInvoice {
-  id                           String     @id @default(cuid())
-  customerId                  String?
-  branchId                    String?
-  warehouseId                 String?
-  writtenoffExpenseAccountId  String?
-  pdfTemplateId               String?
-  invoiceNo                   String
-  referenceNo                 String?
-  invoiceDate                 DateTime?
-  dueDate                     DateTime?
-  deliveredAt                 DateTime?
-  writtenoffAt                DateTime?
-  discount                    Float?
-  discountType                String?
-  adjustment                  Float?
-  balance                     Float?
-  paymentAmount               Float?
-  creditedAmount              Float?
-  writtenoffAmount            Float?
-  exchangeRate                Float?
-  taxAmountWithheld           Float?
-  isInclusiveTax              Boolean?
-  createdAt                   DateTime   @default(now())
-  updatedAt                   DateTime   @updatedAt
+
+model SaleReceipt {
+  id               String    @id @default(uuid())
+  receiptDate      DateTime
+  receiptNumber    String?
+  referenceNo      String?
+  receiptMessage   String?
+  statement        String?
+  amount           Float
+  discount         Float
+  discountType     DiscountType
+  exchangeRate     Float     @default(1.0)
+  adjustment       Float     @default(0.0)
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // FKs
+  customerId       String
+  depositAccountId String
+  branchId         String
+  warehouseId      String
 
   // Relations
-  customer                    Contact?   @relation(fields: [customerId], references: [id])
-  branch                      Branch?    @relation(fields: [branchId], references: [id])
-  warehouse                   Warehouse? @relation(fields: [warehouseId], references: [id])
-  writtenoffExpenseAccount    Account?   @relation(fields: [writtenoffExpenseAccountId], references: [id])
-  pdfTemplate                 PdfTemplate? @relation(fields: [pdfTemplateId], references: [id])
+  customer         Contact   @relation(fields: [customerId], references: [id])
+  depositAccount   Account   @relation(fields: [depositAccountId], references: [id])
+  branch           Branch    @relation(fields: [branchId], references: [id])
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id])
 
-  entries                     ItemEntry[]        @relation("SaleInvoiceEntries")
-  transactions                AccountTransaction[] @relation("SaleInvoiceTransactions")
-  costTransactions           InventoryCostLotTracker[] @relation("SaleInvoiceCostTransactions")
-  paymentEntries              PaymentReceiveEntry[] @relation("SaleInvoicePayments")
-  taxes                       TaxRateTransaction[] @relation("SaleInvoiceTaxes")
-  attachments                 Document[]          @relation("SaleInvoiceAttachments")
-  matchedBankTransaction      MatchedBankTransaction[] @relation("SaleInvoiceBankMatch")
-  paymentMethods              TransactionPaymentServiceEntry[] @relation("SaleInvoicePaymentMethods")
+  entries          ItemEntry[]  @relation("SaleReceiptEntries")
+  transactions     AccountTransaction[] @relation("SaleReceiptTransactions")
 
-  @@map("sales_invoices")
+  attachments      Document[] @relation("SaleReceiptDocuments")
+
+  @@map("sales_receipts")
 }
+
 
 model Item {
   id                   String   @id @default(uuid())
@@ -594,142 +444,6 @@ model Item {
   inventoryAdjustments InventoryAdjustmentEntry[]
 
   mediaLinks           MediaLink[]    // Join table
-}
-
-model ItemWarehouseQuantity {
-  id          Int       @id @default(autoincrement())
-  itemId      Int
-  warehouseId Int
-  quantity    Int
-
-  item        Item      @relation(fields: [itemId], references: [id])
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-
-  @@unique([itemId, warehouseId]) // Optional: prevent duplicate item/warehouse combo
-  @@map("items_warehouses_quantity")
-}
-
-model Warehouse {
-  id                      String                  @id @default(cuid())
-  tenantId                String
-  name                    String
-  primary                 Boolean                 @default(false)
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
-
-  // Relations
-  tenant                  Tenant                  @relation(fields: [tenantId], references: [id])
-
-  // Sales
-  invoices                SaleInvoice[]
-  estimates               SaleEstimate[]
-  receipts                SaleReceipt[]
-
-  // Purchases
-  bills                   Bill[]
-  creditNotes             CreditNote[]
-  vendorCredits           VendorCredit[]
-
-  // Inventory
-  inventoryTransactions   InventoryTransaction[]
-  inventoryAdjustments    InventoryAdjustment[]
-
-  // Transfers
-  warehouseTransferFrom   WarehouseTransfer[]     @relation("FromWarehouse")
-  warehouseTransferTo     WarehouseTransfer[]     @relation("ToWarehouse")
-}
-
-model WarehouseTransfer {
-  id                 String                  @id @default(cuid())
-  tenantId           String
-  fromWarehouseId    String
-  toWarehouseId      String
-  date               DateTime?
-  transactionNumber  String?
-  transferInitiatedAt DateTime?
-  transferDeliveredAt DateTime?
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-
-  // Relations
-  tenant             Tenant                  @relation(fields: [tenantId], references: [id])
-  fromWarehouse      Warehouse               @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
-  toWarehouse        Warehouse               @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
-  entries            WarehouseTransferEntry[]
-
-  @@map("warehouses_transfers")
-}
-
-
-model WarehouseTransferEntry {
-  id                String           @id @default(cuid())
-  tenantId          String
-  warehouseTransferId String
-  itemId            String
-  quantity          Int
-  cost              Decimal
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  // Relations
-  warehouseTransfer WarehouseTransfer @relation(fields: [warehouseTransferId], references: [id])
-  item              Item              @relation(fields: [itemId], references: [id])
-
-  @@map("warehouses_transfers_entries")
-}
-
-model Item {
-  id                   String   @id @default(uuid())
-  type                 String
-  name                 String
-  code                 String?
-  sellable             Boolean  @default(false)
-  purchasable          Boolean  @default(false)
-  sellPrice            Float?
-  costPrice            Float?
-  sellDescription      String?
-  purchaseDescription  String?
-  quantityOnHand       Float?   // Cached value
-  note                 String?
-  active               Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  // Foreign Keys
-  costAccountId        String?
-  sellAccountId        String?
-  inventoryAccountId   String?
-  categoryId           String?
-  sellTaxRateId        String?
-  purchaseTaxRateId    String?
-
-  // Relations
-  costAccount          Account?       @relation("CostAccount", fields: [costAccountId], references: [id])
-  sellAccount          Account?       @relation("SellAccount", fields: [sellAccountId], references: [id])
-  inventoryAccount     Account?       @relation("InventoryAccount", fields: [inventoryAccountId], references: [id])
-  category             ItemCategory?  @relation(fields: [categoryId], references: [id])
-  sellTaxRate          TaxRate?       @relation("SellTax", fields: [sellTaxRateId], references: [id])
-  purchaseTaxRate      TaxRate?       @relation("PurchaseTax", fields: [purchaseTaxRateId], references: [id])
-
-  itemWarehouses       ItemWarehouseQuantity[]
-  itemEntries          ItemEntry[]
-  warehouseTransfers   WarehouseTransferEntry[]
-  inventoryAdjustments InventoryAdjustmentEntry[]
-
-  mediaLinks           MediaLink[]    // Join table
-}
-
-model ItemWarehouseQuantity {
-  id          Int       @id @default(autoincrement())
-  itemId      Int
-  warehouseId Int
-  quantity    Int
-
-  item        Item      @relation(fields: [itemId], references: [id])
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
-
-  @@unique([itemId, warehouseId]) // Optional: prevent duplicate item/warehouse combo
-  @@map("items_warehouses_quantity")
 }
 
 model Warehouse {
@@ -1113,8 +827,748 @@ model BillPaymentEntry {
   @@index([billPaymentId])
 }
 
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (inverse side of HasMany)
+  saleInvoices         SaleInvoice[]
+  saleEstimates        SaleEstimate[]
+  saleReceipts         SaleReceipt[]
+  bills                Bill[]
+  billPayments         BillPayment[]     @relation("BranchOnBillPayments")
+  paymentReceives      PaymentReceive[]
+  vendorCredits        VendorCredit[]
+  creditNotes          CreditNote[]
+  accountTransactions  AccountTransaction[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([name])
+}
+
+model Expense {
+  id               Int       @id @default(autoincrement())
+  referenceNo      String?   @map("reference_no")
+  paymentDate      DateTime? @map("payment_date")
+  paymentAccountId Int?
+  currencyCode     String?
+  exchangeRate     Float?    @default(1)
+  description      String?
+  totalAmount      Float     @map("total_amount")
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime? @default(now()) @map("created_at")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  branchId         Int
+
+  // Relations
+  paymentAccount   Account?                    @relation(fields: [paymentAccountId], references: [id])
+  categories       ExpenseCategory[]           // Expense line items (amount + account)
+  branch           Branch                      @relation(fields: [branchId], references: [id])
+  attachments      Document[]                  @relation("ExpenseAttachments")
+  matchedBankTransactions MatchedBankTransaction[] @relation("ExpenseBankMatches")
+
+  @@map("expenses_transactions")
+}
+
+model ExpenseCategory {
+  id                 String   @id @default(cuid())
+  amount             Decimal
+
+  expenseId          String
+  expense            Expense  @relation(fields: [expenseId], references: [id])
+
+  expenseAccountId   String
+  expenseAccount     Account  @relation(fields: [expenseAccountId], references: [id])
+
+  // Optional: Add any computed field like `unallocatedCostAmount` as a virtual/calculated field in app logic
+  // not needed in Prisma schema
+
+  @@index([expenseId])
+  @@index([expenseAccountId])
+}
 
 
+model InventoryAdjustment {
+  id                  String                      @id @default(cuid())
+  tenantId            String
+  date                DateTime
+  type                InventoryAdjustmentType     // enum: increment | decrement
+  adjustmentAccountId String
+  adjustmentAccount   Account                     @relation(fields: [adjustmentAccountId], references: [id])
+  reason              String?
+  referenceNo         String?
+  description         String?
+  publishedAt         DateTime?
+  createdAt           DateTime                    @default(now())
+
+  entries             InventoryAdjustmentEntry[]  // One-to-many relation
+
+  @@index([tenantId])
+  @@index([adjustmentAccountId])
+}
+
+model InventoryAdjustmentEntry {
+  id            String             @id @default(cuid())
+  tenantId      String
+
+  adjustmentId  String
+  inventoryAdjustment InventoryAdjustment @relation(fields: [adjustmentId], references: [id])
+
+  itemId        String
+  item          Item               @relation(fields: [itemId], references: [id])
+
+  // Optional: you might have quantity, unit cost, etc.
+  // quantity     Int?
+  // unitCost     Decimal?
+
+  @@index([tenantId])
+  @@index([adjustmentId])
+  @@index([itemId])
+}
+
+model InventoryTransaction {
+  id              String                      @id @default(cuid())
+  tenantId        String
+  itemId          String
+  entryId         String?
+  transactionId   Int
+  transactionType String
+  direction       String?                     // IN or OUT
+  quantity        Float?
+  rate            Float?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  // Relationships
+  item            Item                        @relation(fields: [itemId], references: [id])
+  itemEntry       ItemEntry?                  @relation(fields: [entryId], references: [id])
+  meta            InventoryTransactionMeta?
+
+  costLotsByItemId InventoryCostLotTracker[]  @relation("CostLotsByItemId")
+  costLotsByTxnId  InventoryCostLotTracker[]  @relation("CostLotsByTxnId")
+}
+
+
+model InventoryCostLotTracker {
+  id                     String                  @id @default(cuid())
+  tenantId               String
+  branchId               String?
+  warehouseId            String?
+  itemId                 String
+  entryId                String?
+  inventoryTransactionId String?                 // Refers to InventoryTransaction
+  invoiceId              String?                 // Refers to SaleInvoice
+  receiptId              String?                 // Refers to SaleReceipt
+  transactionType        String
+  quantity               Decimal                 @db.Decimal(18, 2)
+  cost                   Decimal                 @db.Decimal(18, 2)
+  date                   DateTime
+
+  // Relationships
+  item                   Item                    @relation(fields: [itemId], references: [id])
+  itemEntry              ItemEntry?              @relation(fields: [entryId], references: [id])
+  inventoryTransaction   InventoryTransaction?   @relation("CostLotsByTxnId", fields: [inventoryTransactionId], references: [id])
+  invoice                SaleInvoice?            @relation("InvoiceCostLot", fields: [invoiceId], references: [id])
+  receipt                SaleReceipt?            @relation("ReceiptCostLot", fields: [receiptId], references: [id])
+
+  @@map("inventory_cost_lot_tracker")
+}
+
+model InventoryTransactionMeta {
+  id                     Int                     @id @default(autoincrement())
+  tenantId               String
+  inventoryTransactionId String
+
+  inventoryTransaction   InventoryTransaction    @relation(fields: [inventoryTransactionId], references: [id], onDelete: Cascade)
+
+  createdAt              DateTime?               @default(now())
+  updatedAt              DateTime?               @updatedAt
+
+  @@map("inventory_transaction_meta")
+}
+
+model ItemEntry {
+  id              String   @id @default(cuid())
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+
+  // Multiple optional reference fields
+  invoiceId       String? 
+  invoice         SaleInvoice? @relation(fields: [invoiceId], references: [id])
+
+  billId          String? 
+  bill            Bill?        @relation(fields: [billId], references: [id])
+
+  estimateId      String?
+  estimate        SaleEstimate? @relation(fields: [estimateId], references: [id])
+
+  receiptId       String?
+  receipt         SaleReceipt? @relation(fields: [receiptId], references: [id])
+
+  landedCostEntryId String?
+  landedCostEntry   BillLandedCostEntry? @relation(fields: [landedCostEntryId], references: [id])
+
+  // same pattern for project-related fields
+  projectTaskId   String?
+  projectTask     ProjectTask? @relation(fields: [projectTaskId], references: [id])
+
+  projectExpenseId String?
+  projectExpense   Expense? @relation(fields: [projectExpenseId], references: [id])
+
+  projectBillId   String?
+  projectBill     Bill? @relation(fields: [projectBillId], references: [id])
+
+  // Tax Rate relation
+  taxRateId       String?
+  taxRate         TaxRate? @relation(fields: [taxRateId], references: [id])
+
+  // timestamps, etc.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ManualJournal {
+  id               String                @id @default(uuid())
+  date             DateTime
+  journalNumber    String
+  reference        String?
+  journalType      String?
+  currencyCode     String?
+  exchangeRate     Float?
+  description      String?
+  amount           Float
+  status           String                @default("draft") // e.g. "draft" | "published"
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  publishedAt      DateTime?
+
+  // ✅ Relationships
+  entries          ManualJournalEntry[]
+  transactions     AccountTransaction[]  @relation("ManualJournal_Transactions")
+  attachments      Document[]            @relation("ManualJournal_Documents")
+  matchedBankTransaction MatchedBankTransaction?
+
+  @@map("manual_journals")
+}
+
+model ManualJournalEntry {
+  id               String   @id @default(uuid())
+  manualJournalId  String
+  accountId        String
+  contactId        String?
+  branchId         String?
+  debit            Float
+  credit           Float
+  note             String?
+  index            Int?
+
+  // ✅ Relationships
+  manualJournal    ManualJournal @relation(fields: [manualJournalId], references: [id])
+  account          Account       @relation(fields: [accountId], references: [id])
+  contact          Contact?      @relation(fields: [contactId], references: [id])
+  branch           Branch?       @relation(fields: [branchId], references: [id])
+
+  @@map("manual_journals_entries")
+}
+
+model MatchedBankTransaction {
+  id             String   @id @default(cuid())
+  tenantId       String
+  referenceId    String     // e.g. payment.id, manualJournal.id
+  referenceType  String     // 'Payment', 'ManualJournal', etc.
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Optional: if you want to explicitly model some relations
+  manualJournal  ManualJournal? @relation(fields: [referenceId], references: [id], onDelete: SetNull, map: "ManualJournal_Matched")
+  payment        Payment?        @relation(fields: [referenceId], references: [id], onDelete: SetNull, map: "Payment_Matched")
+
+  @@index([referenceId, referenceType])
+}
+
+model PaymentReceive {
+  id                String                 @id @default(cuid())
+  tenantId          String
+  customerId        String
+  depositAccountId  String
+  branchId          String
+  pdfTemplateId     String?               // optional
+  amount            Decimal
+  paymentAmount     Decimal
+  exchangeRate      Decimal
+  paymentDate       DateTime
+  referenceNo       String?
+  paymentReceiveNo  String?
+  statement         String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  // Relations
+  customer          Contact               @relation(fields: [customerId], references: [id])
+  depositAccount    Account               @relation(fields: [depositAccountId], references: [id])
+  branch            Branch                @relation(fields: [branchId], references: [id])
+  pdfTemplate       PdfTemplate?          @relation(fields: [pdfTemplateId], references: [id])
+  entries           PaymentReceiveEntry[] // hasMany
+  transactions      AccountTransaction[]  @relation("PaymentReceiveTransactions")
+
+  // Attachments via document_links
+  attachments       Document[]            @relation("PaymentReceiveAttachments")
+
+  @@map("payment_receives")
+}
+
+model PaymentReceiveEntry {
+  id               String          @id @default(cuid())
+  tenantId         String
+  paymentReceiveId String
+  invoiceId        String
+  amount           Decimal
+  discount         Decimal
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  // Relations
+  payment          PaymentReceive  @relation(fields: [paymentReceiveId], references: [id])
+  invoice          SaleInvoice     @relation(fields: [invoiceId], references: [id])
+
+  @@map("payment_receives_entries")
+}
+
+model Project {
+  id            String     @id @default(cuid())
+  tenantId      String
+  contactId     String?    // optional link to a customer
+  costEstimate  Float
+  deadline      DateTime
+  createdAt     DateTime   @map("created_at")
+  updatedAt     DateTime   @map("updated_at")
+
+  // Relations
+  contact   Contact?   @relation(fields: [contactId], references: [id])
+  tasks     Task[]
+  times     Time[]
+  expenses  ExpenseTransaction[] @relation("ProjectExpenses")
+  bills     Bill[]
+
+  @@map("projects")
+}
+
+model ProjectItemEntryRef {
+  id           String   @id @default(cuid())
+  tenantId     String
+  itemEntryId  String
+
+  itemEntry    ItemEntry @relation(fields: [itemEntryId], references: [id])
+
+  @@map("projects_item_entries_links")
+}
+
+model VendorCredit {
+  id                  String        @id @default(cuid())
+  vendorId            String
+  branchId            String?
+  warehouseId         String?
+  exchangeRate        Decimal       @default(1.0)
+  amount              Decimal
+  adjustment          Decimal       @default(0.0)
+  discount            Decimal       @default(0.0)
+  discountType        DiscountType  // ENUM: 'amount' or 'percentage'
+  referenceNo         String?       @db.VarChar(255)
+  vendorCreditNumber  String        @unique
+  vendorCreditDate    DateTime
+  note                String?
+  openedAt            DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // Calculated fields (not stored in DB, available virtually):
+  // localAmount, subtotal, subtotalLocal, discountAmount, discountAmountLocal,
+  // discountPercentage, adjustmentLocal, total, totalLocal,
+  // isDraft, isPublished, isOpen, isClosed, creditsRemaining
+  // Foreign Keys
+  vendor     Contact    @relation(fields: [vendorId], references: [id])
+  branch     Branch?    @relation(fields: [branchId], references: [id])
+  warehouse  Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  // One-to-Many: Item entries
+  entries    ItemEntry[]
+
+  // Many-to-Many: Document attachments via DocumentLink
+  attachments Document[] @relation("VendorCreditDocuments")
+
+  @@map("vendor_credits")
+}
+
+model VendorCreditAppliedBill {
+  id              String   @id @default(cuid())
+  vendorCreditId  String
+  billId          String
+  amount          Decimal   // assuming there's an amount field
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  vendorCredit    VendorCredit @relation(fields: [vendorCreditId], references: [id])
+  bill            Bill         @relation(fields: [billId], references: [id])
+
+  @@map("vendor_credit_applied_bill")
+}
+
+model Time {
+  id         String    @id @default(cuid())
+  projectId  String?   // nullable if time isn't tied to a project
+  taskId     String?   // nullable if not tied to a task
+  duration   Decimal   // e.g. 1.5 hours
+  note       String?   // optional description
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  project    Project?  @relation(fields: [projectId], references: [id])
+  task       Task?     @relation(fields: [taskId], references: [id])
+
+  @@map("times")
+}
+
+model TransactionPaymentServiceEntry {
+  id                   Int                 @id @default(autoincrement())
+  referenceId          Int
+  referenceType        String
+  paymentIntegrationId Int
+  enable               Boolean             @default(true)
+  options              Json?
+
+  paymentIntegration   PaymentIntegration @relation(fields: [paymentIntegrationId], references: [id])
+
+  @@map("transactions_payment_methods")
+}
+
+model UncategorizedCashflowTransaction {
+  id                     Int       @id @default(autoincrement())
+  date                   DateTime
+  amount                 Decimal
+  categorized            Boolean   @default(false)
+  accountId              Int
+  referenceNo            String?
+  payee                  String?
+  description            String?
+  plaidTransactionId     String?   @unique
+  recognizedTransactionId Int?     // nullable FK
+  excludedAt             DateTime?
+  pending                Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  account                Account   @relation(fields: [accountId], references: [id])
+  recognizedTransaction  RecognizedBankTransaction? @relation(fields: [recognizedTransactionId], references: [id])
+  matchedBankTransactions MatchedBankTransaction[]  // hasMany
+
+  @@map("uncategorized_cashflow_transactions")
+}
+
+model Task {
+  id             String   @id @default(cuid())
+  type           String
+  rate           Decimal
+  actualHours    Decimal
+  invoicedHours  Decimal
+  estimateHours  Decimal
+  projectId      String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project        Project  @relation(fields: [projectId], references: [id])
+  times          Time[]
+
+  @@map("tasks")
+}
+
+model Account {
+  id                   Int       @id @default(autoincrement())
+  tenantId            Int
+  parentAccountId     Int?      @map("parent_account_id")
+  name                String
+  code                String?   // Account code (e.g., 101, 201)
+  slug                String?   @unique
+  description         String?
+  accountType         String //AccountType
+  rootType            String //RootType
+  normalType          String //NormalType
+  currencyCode        String?
+  amount              Decimal?  @default(0)
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Self-referencing relation
+  parentAccount       Account?  @relation("AccountParent", fields: [parentAccountId], references: [id])
+  childAccounts       Account[] @relation("AccountParent")
+
+  // Relationships
+  accountTransactions AccountTransaction[]
+  itemSellAccounts    Item[]   @relation("SellAccount")
+  itemCostAccounts    Item[]   @relation("CostAccount")
+  inventoryAdjustments InventoryAdjustment[]
+  manualJournalEntries ManualJournalEntry[]
+  expenses             Expense[]
+  itemEntries          ItemEntry[]
+  uncategorizedCashflowTransactions UncategorizedCashflowTransaction[]
+  plaidItems           PlaidItem[]
+
+  @@map("accounts")
+}
+
+model CashflowTransaction {
+  id                       Int                       @id @default(autoincrement())
+  tenantId                Int
+  transactionType         String
+  amount                  Decimal                   // Monetary value, use Decimal for precision
+  exchangeRate            Decimal
+  uncategorizedTransactionId Int?                  // Nullable FK to uncategorized transaction if applicable
+  cashflowAccountId       Int?                      // Optional FK to Account
+  creditAccountId         Int?                      // Optional FK to Account
+  publishedAt             DateTime?                 // Used to determine if published
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+
+  // Relations
+  entries                 CashflowTransactionLine[] // One-to-many
+  transactions            AccountTransaction[]      @relation("CashflowTxToAccountTx")
+  cashflowAccount         Account?                  @relation("CashflowAccount", fields: [cashflowAccountId], references: [id])
+  creditAccount           Account?                  @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  matchedBankTransactions MatchedBankTransaction[]  @relation("MatchedBankTxToCashflowTx")
+
+  @@map("cashflow_transactions")
+}
+
+model CashflowTransactionLine {
+  id                Int       @id @default(autoincrement())
+  tenantId          Int
+  cashflowAccountId Int?
+  creditAccountId   Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  cashflowAccount   Account?  @relation("CashflowLineAccount", fields: [cashflowAccountId], references: [id])
+  creditAccount     Account?  @relation("CreditLineAccount", fields: [creditAccountId], references: [id])
+
+  @@map("cashflow_transaction_lines")
+}
+
+model CreditNote {
+  id               Int       @id @default(autoincrement())
+  tenantId         Int
+  customerId       Int
+  branchId         Int?
+  warehouseId      Int?
+  pdfTemplateId    Int?
+  amount           Decimal
+  exchangeRate     Decimal
+  discount         Decimal
+  discountType     String
+  adjustment       Decimal
+  creditNoteDate   DateTime? @map("credit_note_date")
+  creditNoteNumber String?   @map("credit_note_number")
+  referenceNo      String?   @map("reference_no")
+  currencyCode     String?   @map("currency_code")
+  note             String?
+  termsConditions  String?   @map("terms_conditions")
+  openedAt         DateTime?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt      @map("updated_at")
+
+  // Relations
+  customer         Contact   @relation(fields: [customerId], references: [id])
+  branch           Branch?   @relation(fields: [branchId], references: [id])
+  warehouse        Warehouse?@relation(fields: [warehouseId], references: [id])
+  pdfTemplate      PdfTemplate? @relation(fields: [pdfTemplateId], references: [id])
+  entries          ItemEntry[]
+  transactions     AccountTransaction[]
+  attachments      Document[] @relation("CreditNoteAttachments", references: [id], through: DocumentLink)
+
+  @@map("credit_notes")
+}
+
+model CreditNoteAppliedInvoice {
+  id           Int       @id @default(autoincrement())
+  tenantId     Int
+  creditNoteId Int
+  invoiceId    Int
+  amount       Decimal
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt      @map("updated_at")
+
+  // Relations
+  creditNote   CreditNote   @relation(fields: [creditNoteId], references: [id])
+  saleInvoice  SaleInvoice  @relation(fields: [invoiceId], references: [id])
+
+  @@map("credit_note_applied_invoice")
+}
+
+model CreditNoteAppliedInvoiceEntry {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt      @map("updated_at")
+
+  // Add foreign key relations here if they exist in future
+
+  @@map("credit_associated_transaction_entry")
+}
+
+model RefundCreditNote {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int
+  fromAccountId Int
+  creditNoteId  Int
+  amount        Decimal
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt      @map("updated_at")
+
+  // Relations
+  fromAccount   Account     @relation(fields: [fromAccountId], references: [id])
+  creditNote    CreditNote  @relation(fields: [creditNoteId], references: [id])
+
+  @@map("refund_credit_note_transactions")
+}
+
+model RecognizedBankTransaction {
+  id                         Int                            @id @default(autoincrement())
+  tenantId                   Int
+  assignedAccountId          Int?                           // FK to Account
+  bankRuleId                 Int?                           // FK to BankRule
+  uncategorizedTransactionId Int?                           // FK to UncategorizedCashflowTransaction (one-to-many)
+
+  // Relations
+  assignAccount              Account?                       @relation("AssignedAccount", fields: [assignedAccountId], references: [id])
+  bankRule                   BankRule?                      @relation(fields: [bankRuleId], references: [id])
+  uncategorizedTransactions  UncategorizedCashflowTransaction[] @relation("RecognizedToUncategorized")
+
+  @@map("recognized_bank_transactions")
+}
+
+model RefundVendorCredit {
+  id               Int       @id @default(autoincrement())
+  tenantId         Int
+  depositAccountId Int?      // FK to Account
+  vendorCreditId   Int?      // FK to VendorCredit
+  created_at       DateTime? @default(now())
+  updated_at       DateTime? @updatedAt
+
+  // Relations
+  depositAccount   Account?       @relation("RefundVendor_DepositAccount", fields: [depositAccountId], references: [id])
+  vendorCredit     VendorCredit?  @relation(fields: [vendorCreditId], references: [id])
+
+  @@map("refund_vendor_credit_transactions")
+}
+
+model SaleEstimate {
+  id                      Int           @id @default(autoincrement())
+  tenantId                Int
+  customerId              Int?
+  branchId                Int?
+  warehouseId             Int?
+  pdfTemplateId           Int?
+  estimateDate            DateTime?
+  expirationDate          DateTime?
+  estimateNumber          String?
+  reference               String?
+  note                    String?
+  termsConditions         String?
+  amount                  Decimal       @db.Decimal(18, 2)
+  discount                Decimal       @default(0) @db.Decimal(10, 2)
+  discountType            String?       // Enum-like: 'Amount' | 'Percentage'
+  adjustment              Decimal       @default(0) @db.Decimal(10, 2)
+  exchangeRate            Decimal       @default(1) @db.Decimal(10, 4)
+  currencyCode            String?
+  deliveredAt             DateTime?
+  approvedAt              DateTime?
+  rejectedAt              DateTime?
+  convertedToInvoiceId    Int?
+  convertedToInvoiceAt    DateTime?
+  createdAt               DateTime?     @default(now())
+  updatedAt               DateTime?     @updatedAt
+
+  // Relations
+  customer                Contact?      @relation("SaleEstimate_Customer", fields: [customerId], references: [id])
+  branch                  Branch?       @relation(fields: [branchId], references: [id])
+  warehouse               Warehouse?    @relation(fields: [warehouseId], references: [id])
+  pdfTemplate             PdfTemplate?  @relation(fields: [pdfTemplateId], references: [id])
+  entries                 ItemEntry[]   @relation("SaleEstimate_Entries")
+  attachments             Document[]    @relation("SaleEstimate_Attachments", references: [id])
+
+  @@map("sales_estimates")
+}
+
+model SaleEstimateEntry {
+  id           Int           @id @default(autoincrement())
+  tenantId     Int
+  estimateId   Int
+
+  // Define your other fields here, e.g., item details, quantity, rate, etc.
+  // quantity      Decimal     @db.Decimal(10, 2)
+  // rate          Decimal     @db.Decimal(10, 2)
+  // amount        Decimal     @db.Decimal(18, 2)
+
+  estimate     SaleEstimate  @relation(fields: [estimateId], references: [id])
+
+  createdAt    DateTime?     @default(now())
+  updatedAt    DateTime?     @updatedAt
+
+  @@map("sales_estimate_entries")
+}
+
+model SaleInvoice {
+  id                         String     @id @default(uuid())
+  invoiceNo                  String
+  referenceNo                String?
+  invoiceDate                DateTime
+  dueDate                    DateTime
+  invoiceMessage             String?
+  termsConditions            String?
+  balance                    Decimal
+  paymentAmount              Decimal
+  taxAmountWithheld          Decimal
+  exchangeRate               Decimal
+  writtenoffAmount           Decimal
+  creditedAmount             Decimal
+  isInclusiveTax             Boolean
+  writtenoffAt               DateTime?
+  discount                   Decimal
+  discountType               DiscountType
+  adjustment                 Decimal?
+
+  // FK fields
+  customerId                 String
+  branchId                   String
+  warehouseId                String
+  writtenoffExpenseAccountId String?
+  pdfTemplateId              String?
+
+  // Timestamps
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+
+  // Relations
+  customer                   Contact     @relation(fields: [customerId], references: [id])
+  branch                     Branch      @relation(fields: [branchId], references: [id])
+  warehouse                  Warehouse   @relation(fields: [warehouseId], references: [id])
+  writtenoffExpenseAccount   Account?    @relation(fields: [writtenoffExpenseAccountId], references: [id])
+  pdfTemplate                PdfTemplate? @relation(fields: [pdfTemplateId], references: [id])
+  entries                    ItemEntry[]
+  transactions               AccountTransaction[]
+  costTransactions           InventoryCostLotTracker[]
+  paymentEntries             PaymentReceiveEntry[]
+  taxes                      TaxRateTransaction[]
+  attachments                Document[] @relation("SaleInvoiceDocuments")
+  matchedBankTransaction     MatchedBankTransaction[]
+  paymentMethods             TransactionPaymentServiceEntry[]
+
+  @@map("sales_invoices")
+}
 
 // ===========================================
 // SUBSCRIPTION/PLAN MODELS
